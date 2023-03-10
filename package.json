@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "gsap": "^3.11.4",
+    "is-mobile": "^4.0.0",
     "normalize.css": "^8.0.1",
     "swiper": "^9.1.0",
     "vue": "^3.2.45",

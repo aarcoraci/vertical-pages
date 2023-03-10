@@ -1,144 +1,140 @@
 <script lang="ts" setup>
-import { onBeforeMount, onMounted, onBeforeUnmount, ref } from 'vue';
+import { isMobile } from 'is-mobile';
+import { onMounted, onBeforeUnmount, ref } from 'vue';
+
+import { gsap, Power2 } from 'gsap';
+import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
+
 import ImageSlide from '../components/slides/ImageSlide.vue';
 import HeaderMenuSlide from '../components/slides/HeaderMenuSlide.vue';
 import SwiperSlide from '../components/slides/SwiperSlide.vue';
 
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
-
-gsap.registerPlugin(ScrollTrigger);
 gsap.registerPlugin(ScrollToPlugin);
 
-let maxSnapDuration = ref<number>((window.innerHeight * 2) / 1024);
 const scrolling = ref(false);
-let scrollTrigger: ScrollTrigger;
+const lastYScroll = ref(0);
+const presentationSlides = ref<HTMLElement[]>([]);
+const paginationContainer = ref<HTMLDivElement>();
+const activeSlideIndex = ref(0);
 
-const resize = () => {
-  if (scrollTrigger) {
-    maxSnapDuration.value = (window.innerHeight * 1.5) / 1024;
-    scrollTrigger.refresh();
-  }
-};
-
-// #region determine which version to show
-const showDesktopVersion = ref(false);
-const breakpoint = window.matchMedia('(min-width:1024px)');
-const breakpointCheck = () => {
-  showDesktopVersion.value = breakpoint.matches;
-  if (!showDesktopVersion.value) {
-    scrollTrigger.disable();
+const getCurrentVisibleSlide = (direction: 'down' | 'up') => {
+  if (direction === 'down') {
+    const scrolledSlides = presentationSlides.value
+      .filter((s) => s.getBoundingClientRect().top <= 0)
+      .sort(
+        (s1, s2) =>
+          s2.getBoundingClientRect().top - s1.getBoundingClientRect().top
+      );
+    return scrolledSlides[0];
   } else {
-    scrollTrigger.enable(false, true);
+    const nonSrolledSlides = presentationSlides.value
+      .filter((s) => s.getBoundingClientRect().top > 0)
+      .sort(
+        (s1, s2) =>
+          s1.getBoundingClientRect().top - s2.getBoundingClientRect().top
+      );
+    return nonSrolledSlides[0];
   }
 };
-breakpoint.addEventListener('change', breakpointCheck);
-// #endregion
 
-// #region gsap
+const handleScroll = (e: Event) => {
+  if (scrolling.value) {
+    lastYScroll.value = window.scrollY;
+    e.preventDefault();
+    return;
+  }
 
-const initScrollTrigger = () => {
-  let slides: HTMLElement[] = Array.from(
-    document.querySelectorAll<HTMLElement>('.vertical-slides-slide')
-  );
-
-  const scrollHeight = slides.reduce((acc, curr) => {
-    return acc + curr.getBoundingClientRect().height;
-  }, 0);
-
-  let snapIntervals: number[] = [];
-  slides.forEach((currentSlide) => {
-    snapIntervals = [
-      ...snapIntervals,
-      currentSlide.getBoundingClientRect().height / scrollHeight
-    ];
-  });
-
-  snapIntervals = snapIntervals.reduce((acc: number[], curr: number, i) => {
-    return i == 0 ? [curr] : [...acc, acc[i - 1] + curr];
-  }, []);
-
-  snapIntervals = [0, ...snapIntervals];
-
-  scrollTrigger = ScrollTrigger.create({
-    trigger: '.vertical-slides',
-    markers: false,
-    start: 'top top',
-    scrub: false,
-    snap: {
-      snapTo: snapIntervals,
-      directional: true,
-      duration: { min: 0.35, max: maxSnapDuration.value },
-      delay: 0.05,
-      onStart: () => {
-        scrolling.value = true;
-      },
-      onComplete: () => {
-        scrolling.value = false;
-      }
+  if (lastYScroll.value < window.scrollY) {
+    // DOWN SCROLLING
+    const currentVisibleSlide = getCurrentVisibleSlide('down');
+    const currentSlideIndex = parseInt(
+      currentVisibleSlide.getAttribute('data-index') || '0'
+    );
+    if (currentSlideIndex < presentationSlides.value.length - 1) {
+      goToSection(currentSlideIndex + 1);
     }
-  });
+  } else {
+    // UP SCROLLING
+    const currentVisibleSlide = getCurrentVisibleSlide('up');
+    const currentSlideIndex = parseInt(
+      currentVisibleSlide.getAttribute('data-index') || '0'
+    );
+    if (currentSlideIndex > 0) {
+      goToSection(currentSlideIndex - 1);
+    }
+  }
+  lastYScroll.value = window.scrollY;
 };
-// #endregion
 
 const goToSection = (i: number) => {
+  activeSlideIndex.value = i;
   scrolling.value = true;
-  // get the top position
-  const { top } = document
-    .querySelectorAll('.vertical-slides-slide')
-    [i].getBoundingClientRect();
-
+  const { top } = presentationSlides.value[i].getBoundingClientRect();
   gsap.to(window, {
     scrollTo: { y: top + window.scrollY, autoKill: false },
     duration: 1.35,
+    delay: 0,
+    ease: Power2.easeInOut,
     onComplete: () => {
-      scrolling.value = false;
+      setTimeout(() => {
+        scrolling.value = false;
+      }, 120);
     }
   });
 };
 
-onBeforeMount(() => {
-  window.addEventListener('resize', resize, { passive: true });
-});
+/**
+ * prepares the slide elements to work with the scrolling effect
+ */
+const prepareSlides = () => {
+  for (let index = 0; index < presentationSlides.value.length; index++) {
+    const element = presentationSlides.value[index];
+    element.setAttribute('data-index', index.toString());
+  }
+};
 
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', resize);
-});
 onMounted(() => {
-  initScrollTrigger();
+  // build list of present slides
+  presentationSlides.value = Array.from(
+    document.querySelectorAll<HTMLElement>('.presentation-slide')
+  );
+
+  if (!isMobile()) {
+    prepareSlides();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+  }
+});
+onBeforeUnmount(() => {
+  if (!isMobile()) {
+    window.removeEventListener('scroll', handleScroll);
+  }
 });
 </script>
 <template>
-  <div class="vertical-slides">
-    <div class="pagination">
-      <button @click.prevent="goToSection(0)">click</button>
-      <button @click.prevent="goToSection(1)">click</button>
-      <button @click.prevent="goToSection(2)">click</button>
-      <button @click.prevent="goToSection(3)">click</button>
-      <button @click.prevent="goToSection(4)">click</button>
-      <button @click.prevent="goToSection(5)">click</button>
+  <main>
+    <div
+      ref="paginationContainer"
+      class="scrollable-pagination"
+      role="navigation"
+    >
+      <div
+        v-for="(_, index) in presentationSlides"
+        class="scrollable-pagination-bullet"
+        role="button"
+        :class="{ active: activeSlideIndex === index }"
+        :aria-label="`go to slide ${index}`"
+        @click="goToSection(index)"
+      ></div>
     </div>
-    <HeaderMenuSlide class="vertical-slides-slide" image="3.jpg" />
-    <image-slide class="vertical-slides-slide" image="1.jpg" :half="false" />
-    <SwiperSlide class="vertical-slides-slide" />
-    <image-slide class="vertical-slides-slide" image="2.jpg" :half="true" />
-    <image-slide class="vertical-slides-slide" image="3.jpg" :half="false" />
-    <image-slide class="vertical-slides-slide" image="4.jpg" :half="false" />
-  </div>
+    <div class="slides">
+      <HeaderMenuSlide class="presentation-slide" image="3.jpg" />
+      <image-slide class="presentation-slide" image="1.jpg" :half="false" />
+      <!-- <SwiperSlide class="presentation-slide" data-index="2" /> -->
+      <image-slide class="presentation-slide" image="2.jpg" :half="true" />
+      <image-slide class="presentation-slide" image="3.jpg" :half="false" />
+      <image-slide class="presentation-slide" image="4.jpg" :half="false" />
+    </div>
+  </main>
 </template>
 
-<style lang="scss" scoped>
-.vertical-slides {
-}
-.pagination {
-  position: fixed;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  background-color: purple;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-}
-</style>
+<style lang="scss" scoped></style>

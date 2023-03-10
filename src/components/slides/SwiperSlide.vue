@@ -24,7 +24,7 @@ const transitionEnd = (swiper: any) => {
       :direction="'vertical'"
       :speed="1350"
       :mousewheel="{
-        releaseOnEdges: false
+        releaseOnEdges: true
       }"
       :touch-release-on-edges="true"
       @transition-start="transitionBegin"
