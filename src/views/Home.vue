@@ -101,7 +101,7 @@ onMounted(() => {
 
   if (!isMobile()) {
     prepareSlides();
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll, { passive: false });
   }
 });
 onBeforeUnmount(() => {
